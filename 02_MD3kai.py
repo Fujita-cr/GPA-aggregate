@@ -123,7 +123,7 @@ def get_target_records(df):
 
     # ③ 必要な列だけ
     result = df_latest[
-        ["ID", "Exam. EYE", "Pattern", "Exam. Day"]
+        ["ID", "Exam. EYE", "Pattern", "Exam. Day", "MD_slope_last3"]
     ]
 
     print(f"対象件数: {len(result)}")
@@ -163,22 +163,16 @@ def main():
     target = get_target_records(df)
 
     debug_print(df)
+    # デバッグ出力
+    df.to_csv("_debug_output.csv", index=False, encoding="utf-8-sig")
+
     print(f"\ntarget 件数: {len(target)}")
     print("\n=== target sample ===")
     print(target.sample(10))
+    target.to_csv("_debug_target_with_slope.csv", index=False, encoding="utf-8-sig")
 
-    # デバッグ出力
-    df.to_csv("_debug_output.csv", index=False, encoding="utf-8-sig")
+    print("\n出力完了")
 
-    # スロープ付きの対象データデバッグ出力
-    target_with_slope = df.merge(
-        target,
-        on=["ID", "Exam. EYE", "Pattern", "Exam. Day"],
-        how="inner"
-    )[
-        ["ID", "Exam. EYE", "Pattern", "Exam. Day", "MD_slope_last3"]
-    ]
-    target_with_slope.to_csv("_debug_target_with_slope.csv", index=False, encoding="utf-8-sig")
 
 if __name__ == "__main__":
     main()
