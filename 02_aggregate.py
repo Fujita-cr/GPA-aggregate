@@ -178,7 +178,7 @@ def extract_target_df(df, target):
 # Thrデータ整形（縦持ち）
 # =========================
 def reshape_thr_data(df):
-    print("Thrデータ整形中...")
+    print("閾値データ整形中...")
 
     thr_cols = [c for c in df.columns if c.startswith("Thr(")]
     records = []
@@ -268,41 +268,48 @@ def calc_distribution(thr_data):
     return result
 
 # =========================
-# サマリ情報出力＋保存
+# サマリ（母集団＋対象まとめ）
 # =========================
-def summarize_target(target):
-    print("\n=== 対象サマリ ===")
+def summarize_target(df, df_target):
+    print("\n=== サマリ ===")
 
-    # ===== 件数 =====
-    patient_count = target["ID"].nunique()
-    eye_count = len(target)
+    group_cols = ["ID", "Exam. EYE", "Pattern"]
+
+    # ===== 母集団 =====
+    total_eyes = df[group_cols].drop_duplicates().shape[0]
+
+    counts = df.groupby(group_cols).size()
+    eyes_3plus = (counts >= 3).sum()
+
+    # ===== 対象 =====
+    patient_count = df_target["ID"].nunique()
+    target_eyes = len(df_target)
+
+    # ===== 年齢 =====
+    age_series = df_target["age_mean_last3"].dropna()
+    mean_age = age_series.mean()
+    std_age = age_series.std()
+
+    # ===== 初回MD =====
+    md_base = pd.to_numeric(df_target["MD_2"], errors="coerce").dropna()
+    md_mean = md_base.mean()
+    md_std = md_base.std()
 
     # ===== 右眼 / 左眼 =====
-    eye_counts = target["Exam. EYE"].value_counts()
+    eye_counts = df_target["Exam. EYE"].value_counts()
     right_eye = eye_counts.get("右眼", 0)
     left_eye = eye_counts.get("左眼", 0)
 
     # ===== 性別 =====
-    gender_counts = target["Gender"].value_counts()
+    gender_counts = df_target["Gender"].value_counts()
     male = gender_counts.get("男", 0)
     female = gender_counts.get("女", 0)
 
-    # ===== 年齢 =====
-    age_series = target["age_mean_last3"].dropna()
-    mean_age = age_series.mean()
-    # var_age = age_series.var()
-    std_age = age_series.std()
-
-    # ===== 初回MD（MD_2） =====
-    md_series = target["MD_2"]
-    md_series = pd.to_numeric(md_series, errors="coerce").dropna()
-    mean_md = md_series.mean()
-    # var_md = md_series.var()
-    std_md = md_series.std()
-
     # ===== 表示 =====
-    print(f"患者数: {patient_count}")
-    print(f"対象眼数: {eye_count}")
+    print(f"全眼数: {total_eyes}")
+    print(f"3回以上検査眼数: {eyes_3plus}")
+    print(f"対象眼数: {target_eyes}")
+    print(f"対象患者数: {patient_count}")
 
     print(f"右眼: {right_eye}")
     print(f"左眼: {left_eye}")
@@ -311,28 +318,30 @@ def summarize_target(target):
     print(f"女性: {female}")
 
     print(f"平均年齢(3回平均): {mean_age:.2f}")
-    # print(f"年齢分散: {var_age:.2f}")
     print(f"年齢SD: {std_age:.2f}")
 
-    print(f"初回MD平均: {mean_md:.2f}")
-    # print(f"初回MD分散: {var_md:.2f}")
-    print(f"初回MD SD: {std_md:.2f}")
+    print(f"初回MD平均: {md_mean:.2f}")
+    print(f"初回MD SD: {md_std:.2f}")
 
     # ===== 保存 =====
     summary_df = pd.DataFrame([{
         "Strategy": TARGET_STRATEGY,
-        "患者数": patient_count,
-        "対象眼数": eye_count,
+
+        "全眼数": total_eyes,
+        "3回以上検査眼数": eyes_3plus,
+        "対象眼数": target_eyes,
+        "対象患者数": patient_count,
+
         "右眼": right_eye,
         "左眼": left_eye,
         "男性": male,
         "女性": female,
+
         "平均年齢(3回平均)": mean_age,
-        # "年齢分散": var_age,
         "年齢SD": std_age,
-        "初回MD平均": mean_md,
-        # "初回MD分散": var_md,
-        "初回MD_SD": std_md
+
+        "初回MD平均": md_mean,
+        "初回MD_SD": md_std
     }])
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -343,9 +352,8 @@ def summarize_target(target):
         encoding="utf-8-sig"
     )
 
-    print("サマリ出力完了")
+    print("＝サマリ出力完了＝")
 
-    # 必要なら戻り値（今後の拡張用）
     return summary_df
 
 # =========================
@@ -390,7 +398,7 @@ def main():
     df_target = extract_target_df(df, target)
 
     # ===== サマリ =====
-    summarize_target(df_target)
+    summarize_target(df, df_target)
 
     # ===== Thr処理 =====
     thr_data = reshape_thr_data(df_target)
