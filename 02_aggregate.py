@@ -287,13 +287,7 @@ def summarize_target(df, df_target):
     eyes_3plus = (counts >= 3).sum()
 
     # ===== 対象 =====
-    patient_count = df_target["ID"].nunique()
     target_eyes = len(df_target)
-
-    # ===== 年齢 =====
-    age_series = df_target["age_mean_last3"].dropna()
-    mean_age = age_series.mean()
-    std_age = age_series.std()
 
     # ===== 初回MD =====
     md_base = pd.to_numeric(df_target["MD_2"], errors="coerce").dropna()
@@ -305,28 +299,35 @@ def summarize_target(df, df_target):
     right_eye = eye_counts.get("右眼", 0)
     left_eye = eye_counts.get("左眼", 0)
 
-    # ===== 性別 =====
-    gender_counts = df_target["Gender"].value_counts()
-    male = gender_counts.get("男", 0)
-    female = gender_counts.get("女", 0)
+    # ===== 患者単位 =====
+    patient_count = df_target["ID"].nunique()
+
+    df_patient = df_target.groupby("ID").agg({
+        "age_mean_last3": "mean",
+        "Gender": "first"
+    }).reset_index()
+
+    mean_age = df_patient["age_mean_last3"].mean()
+    std_age = df_patient["age_mean_last3"].std()
+
+    male = (df_patient["Gender"] == "男").sum()
+    female = (df_patient["Gender"] == "女").sum()
 
     # ===== 表示 =====
     print(f"全眼数: {total_eyes}")
     print(f"3回以上検査眼数: {eyes_3plus}")
     print(f"対象眼数: {target_eyes}")
-    print(f"対象患者数: {patient_count}")
-
     print(f"右眼: {right_eye}")
     print(f"左眼: {left_eye}")
-
-    print(f"男性: {male}")
-    print(f"女性: {female}")
-
-    print(f"平均年齢(3回平均): {mean_age:.2f}")
-    print(f"年齢SD: {std_age:.2f}")
-
     print(f"初回MD平均: {md_mean:.2f}")
     print(f"初回MD SD: {md_std:.2f}")
+
+
+    print(f"対象者数: {patient_count}")
+    print(f"男性: {male}")
+    print(f"女性: {female}")
+    print(f"平均年齢(3回平均): {mean_age:.2f}")
+    print(f"年齢SD: {std_age:.2f}")
 
     # ===== 保存 =====
     summary_df = pd.DataFrame([{
@@ -335,18 +336,17 @@ def summarize_target(df, df_target):
         "全眼数": total_eyes,
         "3回以上検査眼数": eyes_3plus,
         "対象眼数": target_eyes,
-        "対象患者数": patient_count,
 
         "右眼": right_eye,
         "左眼": left_eye,
+        "初回MD平均": md_mean,
+        "初回MD_SD": md_std,
+
+        "対象者数": patient_count,
         "男性": male,
         "女性": female,
-
         "平均年齢(3回平均)": mean_age,
         "年齢SD": std_age,
-
-        "初回MD平均": md_mean,
-        "初回MD_SD": md_std
     }])
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
