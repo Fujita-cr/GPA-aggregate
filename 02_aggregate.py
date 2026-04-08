@@ -137,24 +137,22 @@ def add_slope(df):
     return df
 
 # =========================
-# 対象データ抽出
+# 対象データ抽出（キーのみ）
 # =========================
 def get_target_records(df):
     print("対象データ抽出中...")
 
-    # ① スロープ条件
     df_filtered = df[
         (df["MD_slope_last3"].abs() <= 0.5)
     ]
 
-    # ② 最新1件だけ取得
     df_latest = df_filtered.groupby(
         ["ID", "Exam. EYE", "Pattern"]
     ).head(1)
 
-    # ③ 必要な列だけ
+    # ★ キーだけにする
     result = df_latest[
-        ["ID", "Exam. EYE", "Pattern", "ExamDate", "MD_slope_last3", "age_mean_last3"]
+        ["ID", "Exam. EYE", "Pattern", "ExamDate"]
     ]
 
     print(f"対象件数: {len(result)}")
@@ -270,7 +268,7 @@ def calc_distribution(thr_data):
     return result
 
 # =========================
-# サマリ情報出力
+# サマリ情報出力＋保存
 # =========================
 def summarize_target(target):
     print("\n=== 対象サマリ ===")
@@ -279,35 +277,65 @@ def summarize_target(target):
     patient_count = target["ID"].nunique()
     eye_count = len(target)
 
-    # ===== 年齢（3回平均） =====
-    age_series = target["age_mean_last3"]
+    # ===== 右眼 / 左眼 =====
+    eye_counts = target["Exam. EYE"].value_counts()
+    right_eye = eye_counts.get("右眼", 0)
+    left_eye = eye_counts.get("左眼", 0)
 
-    # NaN除去
-    age_series = age_series.dropna()
+    # ===== 性別 =====
+    gender_counts = target["Gender"].value_counts()
+    male = gender_counts.get("男", 0)
+    female = gender_counts.get("女", 0)
 
+    # ===== 年齢 =====
+    age_series = target["age_mean_last3"].dropna()
     mean_age = age_series.mean()
-    var_age = age_series.var()
+    # var_age = age_series.var()
     std_age = age_series.std()
 
+    # ===== 初回MD（MD_2） =====
+    md_series = target["MD_2"]
+    md_series = pd.to_numeric(md_series, errors="coerce").dropna()
+    mean_md = md_series.mean()
+    # var_md = md_series.var()
+    std_md = md_series.std()
+
+    # ===== 表示 =====
     print(f"患者数: {patient_count}")
     print(f"対象眼数: {eye_count}")
+
+    print(f"右眼: {right_eye}")
+    print(f"左眼: {left_eye}")
+
+    print(f"男性: {male}")
+    print(f"女性: {female}")
+
     print(f"平均年齢(3回平均): {mean_age:.2f}")
-    print(f"年齢分散: {var_age:.2f}")
+    # print(f"年齢分散: {var_age:.2f}")
     print(f"年齢SD: {std_age:.2f}")
 
-    return patient_count, eye_count, mean_age, var_age, std_age
+    print(f"初回MD平均: {mean_md:.2f}")
+    # print(f"初回MD分散: {var_md:.2f}")
+    print(f"初回MD SD: {std_md:.2f}")
 
-# =========================
-# サマリ情報保存
-# =========================
-def save_summary(patient_count, eye_count, mean_age, var_age, std_age):
+    # ===== 保存 =====
     summary_df = pd.DataFrame([{
         "Strategy": TARGET_STRATEGY,
         "患者数": patient_count,
         "対象眼数": eye_count,
+        "右眼": right_eye,
+        "左眼": left_eye,
+        "男性": male,
+        "女性": female,
         "平均年齢(3回平均)": mean_age,
-        "年齢SD": std_age
+        # "年齢分散": var_age,
+        "年齢SD": std_age,
+        "初回MD平均": mean_md,
+        # "初回MD分散": var_md,
+        "初回MD_SD": std_md
     }])
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     summary_df.to_csv(
         os.path.join(OUTPUT_DIR, f"_{SAFE_STRATEGY}_00_summary.csv"),
@@ -316,6 +344,9 @@ def save_summary(patient_count, eye_count, mean_age, var_age, std_age):
     )
 
     print("サマリ出力完了")
+
+    # 必要なら戻り値（今後の拡張用）
+    return summary_df
 
 # =========================
 # デバッグ表示
@@ -344,41 +375,40 @@ def debug_print(df):
 # メイン
 # =========================
 def main():
-    print("連続した3回の検査のMDスロープを計算して、悪化のない眼の対象データを抽出します。")
+    print("解析開始")
 
     df = load_data(INPUT_FILE)
     df = preprocess(df)
     df = add_shift_columns(df)
     df = add_thr_shift(df)
     df = add_slope(df)
-    debug_print(df)
 
+    # ===== target抽出 =====
     target = get_target_records(df)
 
-    # targetに対応する元データ
+    # ===== 元データ復元 =====
     df_target = extract_target_df(df, target)
 
-    # Thr整形
+    # ===== サマリ =====
+    summarize_target(df_target)
+
+    # ===== Thr処理 =====
     thr_data = reshape_thr_data(df_target)
-    # Thr盲点除外
     thr_data = remove_blind_spot(thr_data)
 
-    # 分布計算
+    # ===== 分布 =====
     dist = calc_distribution(thr_data)
-
 
     # ===== 出力 =====
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+
     df.to_csv(os.path.join(OUTPUT_DIR, f"_{SAFE_STRATEGY}_01_preprocess.csv"), index=False, encoding="utf-8-sig")
-    target.to_csv(os.path.join(OUTPUT_DIR, f"_{SAFE_STRATEGY}_02_target_with_slope.csv"), index=False, encoding="utf-8-sig")
-    thr_data.to_csv(os.path.join(OUTPUT_DIR, f"_{SAFE_STRATEGY}_03_thr_analysis.csv"), index=False, encoding="utf-8-sig")
-    dist.to_csv(os.path.join(OUTPUT_DIR, f"_{SAFE_STRATEGY}_04_distribution.csv"), index=False, encoding="utf-8-sig")
+    target.to_csv(os.path.join(OUTPUT_DIR, f"_{SAFE_STRATEGY}_02_target_keys.csv"), index=False, encoding="utf-8-sig")
+    df_target.to_csv(os.path.join(OUTPUT_DIR, f"_{SAFE_STRATEGY}_03_target_full.csv"), index=False, encoding="utf-8-sig")
+    thr_data.to_csv(os.path.join(OUTPUT_DIR, f"_{SAFE_STRATEGY}_04_thr_analysis.csv"), index=False, encoding="utf-8-sig")
+    dist.to_csv(os.path.join(OUTPUT_DIR, f"_{SAFE_STRATEGY}_05_distribution.csv"), index=False, encoding="utf-8-sig")
+
     print("\n出力完了")
-    
-    # サマリ出力
-    patient_count, eye_count, mean_age, var_age, std_age = summarize_target(target)
-    # サマリ保存
-    save_summary(patient_count, eye_count, mean_age, var_age, std_age)
 
 if __name__ == "__main__":
     main()
