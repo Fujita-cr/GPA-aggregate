@@ -1,12 +1,17 @@
 import pandas as pd
 import numpy as np
 import os
+import sys
 
 # 対象
-TARGET_STRATEGY = "AIZE"
-# TARGET_STRATEGY = "AIZE-Rapid EX"
-# TARGET_STRATEGY = "AIZE EX"
-# TARGET_STRATEGY = "AIZE-Rapid"
+if len(sys.argv) > 1:
+    TARGET_STRATEGY = sys.argv[1]
+else:
+    TARGET_STRATEGY = "AIZE"  # デフォルト
+    # TARGET_STRATEGY = "AIZE-Rapid EX"
+    # TARGET_STRATEGY = "AIZE EX"
+    # TARGET_STRATEGY = "AIZE-Rapid"
+
 # ファイル名用（スペース対策）
 SAFE_STRATEGY = TARGET_STRATEGY.replace(" ", "_")
 INPUT_FILE = f"01_filtered/filtered_{SAFE_STRATEGY}.csv"
