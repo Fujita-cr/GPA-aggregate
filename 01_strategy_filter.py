@@ -4,7 +4,7 @@ import os
 # =========================
 # 設定
 # =========================
-INPUT_FILE = "_marge_Result.csv"
+INPUT_FILE = "02_output/_marge_Result.csv"
 OUTPUT_DIR = "01_filtered"
 
 

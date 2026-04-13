@@ -17,6 +17,9 @@ SAFE_STRATEGY = TARGET_STRATEGY.replace(" ", "_")
 INPUT_FILE = f"01_filtered/filtered_{SAFE_STRATEGY}.csv"
 OUTPUT_DIR = "02_output"
 
+# キー指定
+PATIENT_KEY = ["facility", "ID"]
+EYE_KEY = ["facility", "ID", "Exam. EYE", "Pattern"]
 
 # =========================
 # データ読み込み
@@ -39,15 +42,15 @@ def preprocess(df):
     # ★ 日付部分だけ作る
     df["ExamDate"] = df["Exam. Day"].dt.date
 
-    # ★ ソート（時間が新しい順にする）
+    # ソート（時間が新しい順にする）
     df = df.sort_values(
-        ["ID", "Exam. EYE", "Pattern", "Exam. Day"],
-        ascending=[True, True, True, False]
+        ["facility", "ID", "Exam. EYE", "Pattern", "Exam. Day"],
+        ascending=[True, True, True, True, False]
     )
 
-    # ★ 同一日で重複削除（最新だけ残す）
+    # 同一日で重複削除（最新だけ残す）
     df = df.drop_duplicates(
-        subset=["ID", "Exam. EYE", "Pattern", "ExamDate"],
+        subset=EYE_KEY + ["ExamDate"],
         keep="first"
     )
 
@@ -60,7 +63,7 @@ def preprocess(df):
 def add_shift_columns(df):
     print("shift列作成中...")
 
-    group_cols = ["ID", "Exam. EYE", "Pattern"]
+    group_cols = EYE_KEY
 
     # ===== 年齢計算 =====
     df["ExamDate"] = pd.to_datetime(df["ExamDate"], errors="coerce")
@@ -87,7 +90,7 @@ def add_shift_columns(df):
 def add_thr_shift(df):
     print("Thr shift作成中...")
 
-    group_cols = ["ID", "Exam. EYE", "Pattern"]
+    group_cols = EYE_KEY
     thr_cols = [c for c in df.columns if c.startswith("Thr(")]
 
     for col in thr_cols:
@@ -151,13 +154,10 @@ def get_target_records(df):
         (df["MD_slope_last3"].abs() <= 0.5)
     ]
 
-    df_latest = df_filtered.groupby(
-        ["ID", "Exam. EYE", "Pattern"]
-    ).head(1)
+    df_latest = df_filtered.groupby(EYE_KEY).head(1)
 
-    # ★ キーだけにする
     result = df_latest[
-        ["ID", "Exam. EYE", "Pattern", "ExamDate"]
+        ["facility", "ID", "Exam. EYE", "Pattern", "ExamDate"]
     ]
 
     print(f"対象件数: {len(result)}")
@@ -172,7 +172,7 @@ def extract_target_df(df, target):
 
     merged = df.merge(
         target,
-        on=["ID", "Exam. EYE", "Pattern", "ExamDate"],
+        on=["facility", "ID", "Exam. EYE", "Pattern", "ExamDate"],
         how="inner"
     )
 
@@ -212,6 +212,7 @@ def reshape_thr_data(df):
                 continue
 
             records.append({
+                "facility": row["facility"],
                 "ID": row["ID"],
                 "Exam. EYE": row["Exam. EYE"],
                 "Pattern": row["Pattern"],
@@ -278,7 +279,7 @@ def calc_distribution(thr_data):
 def summarize_target(df, df_target):
     print("\n=== サマリ ===")
 
-    group_cols = ["ID", "Exam. EYE", "Pattern"]
+    group_cols = EYE_KEY
 
     # ===== 母集団 =====
     total_eyes = df[group_cols].drop_duplicates().shape[0]
@@ -300,9 +301,9 @@ def summarize_target(df, df_target):
     left_eye = eye_counts.get("左眼", 0)
 
     # ===== 患者単位 =====
-    patient_count = df_target["ID"].nunique()
+    patient_count = df_target[PATIENT_KEY].drop_duplicates().shape[0]
 
-    df_patient = df_target.groupby("ID").agg({
+    df_patient = df_target.groupby(PATIENT_KEY).agg({
         "age_mean_last3": "mean",
         "Gender": "first"
     }).reset_index()
@@ -366,7 +367,7 @@ def summarize_target(df, df_target):
 # =========================
 def debug_print(df):
     cols = [
-        "ID", "Exam. EYE", "Pattern",
+        "facility", "ID", "Exam. EYE", "Pattern",
         "ExamDate", "MD",
         "ExamDate_1", "MD_1",
         "ExamDate_2", "MD_2",
@@ -377,11 +378,6 @@ def debug_print(df):
     print(f"df 件数: {len(df)}")
     print("=== head ===")
     print(df.head(20)[cols])
-
-    # 任意のIDで確認
-    # test_id = df["ID"].iloc[0]
-    # print(f"\n=== ID別確認: {test_id} ===")
-    # print(df[df["ID"] == test_id][cols])
 
 
 # =========================
